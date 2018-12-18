@@ -1,0 +1,102 @@
+open List 
+open Sets 
+	 
+(*********) 
+(* Types *) 
+(*********) 
+	 
+type ('q, 's) transition = 'q * 's option * 'q 
+type ('q, 's) nfa_t = { 
+  qs : 'q list; 
+  sigma : 's list; 
+  delta : ('q, 's) transition list; 
+  q0 : 'q; 
+  fs : 'q list; 
+} 
+	 
+(***********) 
+(* Utility *) 
+(***********) 
+	 
+let explode s = 
+  let rec exp i l = 
+    if i < 0 then l else exp (i - 1) (s.[i] :: l) in 
+  exp (String.length s - 1) [] 
+ 
+(****************) 
+(* Part 1: NFAs *) 
+(****************) 
+ 
+let rec elem a lst = 
+match lst with 
+  [] -> false 
+  |h::t -> if Sets.eq a h then true else elem a t 
+;; 
+ 
+let rec uniq lst =  
+match lst with  
+  [] -> [] 
+  |h::t -> if elem h t then uniq t else h::(uniq t) 
+;; 
+ 
+let move m qs s = 
+let f q = 
+  let find_result acc transition = match transition with 
+    |(a, symbol, b) when q = a -> if symbol = s then b::acc else acc 
+    |_ -> acc 
+  in fold_left find_result [] m.delta  
+in fold_left (fun a h -> Sets.union a h) [] (map f qs) 
+;; 
+ 
+let rec e_closure m qs =  
+let final_states = Sets.union qs (move m qs None) 
+in if Sets.eq qs final_states then final_states else e_closure m final_states 
+;; 
+ 
+let rec accept_helper m start str = 
+match str with 
+  [] -> List.exists (fun a -> Sets.elem a m.fs) start 
+  |h::t ->  
+    let final = move m start (Some h) in  
+    if final = [] then false else 
+    accept_helper m (e_closure m final) t 
+;; 
+ 
+let accept m str = 
+let start = e_closure m [m.q0] in accept_helper m start (explode str) 
+;; 
+ 
+ 
+(*******************************) 
+(* Part 2: Subset Construction *) 
+(*******************************) 
+ 
+let new_states m qs =  
+let f symbol = e_closure m (move m qs (Some symbol)) in map f m.sigma 
+;; 
+ 
+let new_trans m qs = 
+let f symbol = (qs, Some symbol, e_closure m (move m qs (Some symbol))) in map f m.sigma 
+;; 
+ 
+let new_finals m qs = 
+if (List.exists (fun state -> Sets.elem state m.fs) qs) then [qs] else [] 
+;; 
+ 
+let rec nfa_to_dfa_step m dfa wrk = 
+match wrk with 
+  [] -> dfa 
+  |h::t -> 
+    let transitions = new_trans m h in 
+      let final = new_finals m h in 
+       let new_states = fold_left (fun a h -> if h = [] || elem h wrk || elem h dfa.qs then a else h::a) [] (new_states m h) in 
+         let new_wrk = new_states@t in 
+            let new_dfa = { dfa with qs = h::dfa.qs; delta = transitions@dfa.delta; fs = uniq (final@dfa.fs)} in 
+    nfa_to_dfa_step m new_dfa new_wrk 
+;; 
+ 
+let nfa_to_dfa m = 
+let start = e_closure m [m.q0] in 
+	let dfa = {qs = []; sigma = m.sigma; delta = []; q0 = start; fs = []}  in 
+nfa_to_dfa_step m dfa [dfa.q0] 
+;; 

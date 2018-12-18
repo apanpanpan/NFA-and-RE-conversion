@@ -1,0 +1,69 @@
+open List 
+open Nfa 
+	 
+(*********) 
+(* Types *) 
+(*********) 
+	 
+type regexp_t = 
+  | Empty_String 
+  | Char of char 
+  | Union of regexp_t * regexp_t 
+  | Concat of regexp_t * regexp_t 
+  | Star of regexp_t 
+	 
+(***********) 
+(* Utility *) 
+(***********) 
+	 
+let fresh = 
+  let cntr = ref 0 in 
+  fun () -> cntr := !cntr + 1 ; !cntr 
+ 
+(*******************************) 
+(* Part 3: Regular Expressions *) 
+(*******************************) 
+	 
+let rec regexp_to_nfa re =  
+match re with 
+  |Empty_String -> let state = fresh() in {qs=[state];sigma=[];delta=[];q0=state;fs=[state]} 
+ 
+  |Char c -> let start = fresh() in let final = fresh() in 
+               {qs=[start;final];sigma=[c];delta=[(start, Some c, final)];q0=start;fs=[final]} 
+	 
+  |Union (first , sec) -> 
+    let a = regexp_to_nfa first in  
+      let b = regexp_to_nfa sec in 
+        let start = fresh() in let final = fresh() in 
+          let states = [start;final]@(Sets.union a.qs b.qs) in 
+             let sigs = Sets.union a.sigma b.sigma in 
+                let atran = a.delta@(map (fun state -> (state, None, final)) a.fs) in 
+                  let btran = b.delta@(map (fun state -> (state, None, final)) b.fs) in 
+                      let alltrans = [(start, None, a.q0);(start, None, b.q0)]@atran@btran in 
+    {qs = states; sigma = sigs; delta = alltrans; q0 = start; fs = [final]} 
+ 
+  |Concat (first, sec) -> 
+    let a = regexp_to_nfa first in 
+      let b = regexp_to_nfa sec in  
+        let states = Sets.union a.qs b.qs in 
+          let sigs = Sets.union a.sigma b.sigma in 
+            let atran = a.delta@(map (fun state -> (state, None, b.q0)) a.fs) in 
+              let alltrans = Sets.union atran b.delta in 
+    {qs = states; sigma = sigs; delta = alltrans; q0 = a.q0; fs = b.fs} 
+ 
+  |Star exp -> 
+    let a = regexp_to_nfa exp in 
+      let start = fresh() in let final = fresh() in 
+        let atran = a.delta@(map (fun state -> (state, None, final)) a.fs) in 
+            let alltrans = [(start, None, a.q0);(start, None, final);(final, None, start)]@atran in 
+    {qs = [start;final]@a.qs; sigma = a.sigma; delta = alltrans; q0 = start; fs = [final]} 
+;; 
+	 
+let rec regexp_to_string r = 
+match r with 
+  |Empty_String -> "E" 
+  |Char c -> String.make 1 c 
+  |Union (a, b) -> "(" ^ regexp_to_string a ^ "|" ^ regexp_to_string b ^ ")" 
+  |Concat (a, b) -> "(" ^ regexp_to_string a ^ regexp_to_string b ^ ")" 
+  |Star exp -> "(" ^ regexp_to_string exp ^ "*)" '
+;;
